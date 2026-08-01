@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prueba de acceso — Stock La Pringles</title>
+<style>
+  body { font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 20px; color: #23291F; }
+  button { padding: 12px 18px; font-size: 15px; border-radius: 4px; border: none; background: #2C4A3B; color: #F3EFE3; cursor: pointer; margin-top: 10px; }
+  input { padding: 10px; font-size: 15px; width: 100%; box-sizing: border-box; margin-top: 6px; }
+  .row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding: 8px 0; }
+  #estado { margin: 20px 0; padding: 14px; background: #F3EFE3; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <h1>Prueba de acceso</h1>
+  <div id="estado">Cargando...</div>
+  <div id="panelAdmin" style="display:none;">
+    <h3>Dar acceso a alguien nuevo</h3>
+    <input type="email" id="nuevoEmail" placeholder="email@gmail.com">
+    <select id="nuevoRol">
+      <option value="dirigente">Dirigente</option>
+      <option value="admin">Administrador</option>
+    </select>
+    <button id="btnAgregar">Agregar</button>
+    <h3>Usuarios con acceso</h3>
+    <div id="listaUsuarios"></div>
+  </div>
+
+  <script type="module">
+    import {
+      iniciarSesionConGoogle, cerrarSesion, observarSesion, SUPER_ADMIN,
+      otorgarAcceso, listarUsuariosAutorizados
+    } from "./js/auth-google.js";
+
+    const estadoDiv = document.getElementById('estado');
+    const panelAdmin = document.getElementById('panelAdmin');
+    let usuarioActual = null;
+
+    observarSesion(async (user, rol) => {
+      usuarioActual = user;
+      if (!user) {
+        estadoDiv.innerHTML = `<p>No hay sesión iniciada.</p><button id="btnLogin">Iniciar sesión con Google</button>`;
+        document.getElementById('btnLogin').onclick = () => iniciarSesionConGoogle().catch(e => alert('Error: ' + e.message));
+        panelAdmin.style.display = 'none';
+        return;
+      }
+      estadoDiv.innerHTML = `<p><b>${user.email}</b></p><p>Rol: ${rol}</p><button id="btnLogout">Cerrar sesión</button>`;
+      document.getElementById('btnLogout').onclick = () => cerrarSesion();
+      if (rol === 'admin') {
+        panelAdmin.style.display = 'block';
+        await renderUsuarios();
+      } else {
+        panelAdmin.style.display = 'none';
+      }
+    });
+
+    async function renderUsuarios() {
+      const usuarios = await listarUsuariosAutorizados();
+      const lista = [{ email: SUPER_ADMIN, rol: 'admin' }, ...usuarios.filter(u => u.email !== SUPER_ADMIN)];
+      document.getElementById('listaUsuarios').innerHTML = lista.map(u =>
+        `<div class="row"><span>${u.email}</span><span>${u.rol}</span></div>`
+      ).join('');
+    }
+
+    document.getElementById('btnAgregar').onclick = async () => {
+      const email = document.getElementById('nuevoEmail').value.trim();
+      const rol = document.getElementById('nuevoRol').value;
+      if (!email) return;
+      await otorgarAcceso(email, rol, usuarioActual.email);
+      document.getElementById('nuevoEmail').value = '';
+      await renderUsuarios();
+    };
+  </script>
+</body>
+</html>
