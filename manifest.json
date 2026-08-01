@@ -1,0 +1,14 @@
+{
+  "name": "Stock La Pringles",
+  "short_name": "Stock Pringles",
+  "description": "Control de stock del Chino y el Pañol — Grupo Scout Cnel. Juan Pascual Pringles",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#2C4A3B",
+  "theme_color": "#2C4A3B",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
