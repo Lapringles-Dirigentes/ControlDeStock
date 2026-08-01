@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Stock Pringles">
+<meta name="theme-color" content="#2C4A3B">
+<title>Stock La Pringles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --canvas: #F3EFE3;
+    --canvas-dark: #E7E0CC;
+    --ink: #23291F;
+    --forest: #2C4A3B;
+    --forest-light: #3E6350;
+    --khaki: #A99A6B;
+    --amber: #C97F2A;
+    --amber-bg: #FBEBD6;
+    --red: #A63B32;
+    --red-bg: #F6DFDA;
+    --green-ok: #4A7A5C;
+    --green-bg: #E1EBDF;
+    --blue: #3D6A8A;
+    --blue-bg: #DEE9F0;
+    --tab-shadow: rgba(35,41,31,0.14);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--canvas); color: var(--ink); font-family: 'Source Sans 3', sans-serif; -webkit-font-smoothing: antialiased; }
+  body { background-image: radial-gradient(circle at 1px 1px, rgba(35,41,31,0.05) 1px, transparent 0); background-size: 18px 18px; }
+  .app { max-width: 480px; margin: 0 auto; min-height: 100vh; padding-bottom: 60px; }
+
+  /* Login gate */
+  .login-screen { position: fixed; inset: 0; background: var(--forest); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .login-box { max-width: 380px; width: 100%; text-align: center; }
+  .login-box .eyebrow { color: var(--khaki); justify-content: center; display: flex; }
+  .login-box h1 { color: var(--canvas); font-family: 'Oswald', sans-serif; text-transform: uppercase; font-size: 26px; margin: 4px 0 6px; }
+  .login-box .lead { color: rgba(243,239,227,0.65); font-size: 13.5px; margin: 0 0 22px; line-height: 1.5; }
+  .login-box input { width: 100%; padding: 13px 14px; border-radius: 3px; border: 1.5px solid var(--khaki); font-size: 15px; text-align: center; }
+  .login-box .btn-primary { width: 100%; margin-top: 12px; padding: 13px; }
+  .login-error { color: #E9A79B; font-family: 'IBM Plex Mono', monospace; font-size: 12px; margin-top: 14px; line-height: 1.5; display: none; }
+  .login-error.show { display: block; }
+
+  /* Hidden bottom permissions button */
+  .perm-btn { position: fixed; bottom: 10px; right: 10px; width: 30px; height: 30px; border-radius: 50%; background: rgba(35,41,31,0.12); color: rgba(35,41,31,0.35); font-size: 13px; display: flex; align-items: center; justify-content: center; z-index: 40; transition: opacity 0.2s; }
+  .perm-btn:active { background: rgba(35,41,31,0.25); }
+
+  /* Permission panel extras */
+  .perm-user-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--canvas-dark); gap: 8px; }
+  .perm-user-info { font-size: 13px; }
+  .perm-user-info .e { font-weight: 600; word-break: break-all; }
+  .perm-user-info .r { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #766A4A; text-transform: uppercase; }
+  .perm-user-controls { display: flex; gap: 6px; flex-shrink: 0; }
+  .perm-mini-btn { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; padding: 6px 8px; border-radius: 3px; background: var(--canvas-dark); color: var(--forest); font-weight: 600; }
+  .perm-mini-btn.del { color: var(--red); }
+  .perm-locked { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #8B8064; }
+  .session-bar { display: flex; justify-content: space-between; align-items: center; background: var(--canvas-dark); border-radius: 3px; padding: 10px 12px; margin-bottom: 16px; font-size: 12.5px; }
+  .session-bar b { display: block; font-size: 13px; }
+  button { font-family: 'Source Sans 3', sans-serif; cursor: pointer; border: none; background: none; }
+  input, select, textarea { font-family: inherit; }
+
+  header.top { padding: 18px 20px 0; border-bottom: 3px solid var(--forest); background: var(--forest); color: var(--canvas); position: sticky; top: 0; z-index: 20; }
+  .header-row { display: flex; justify-content: space-between; align-items: flex-start; }
+  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--khaki); margin: 0 0 4px; }
+  h1.title { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 24px; letter-spacing: 0.01em; margin: 0; text-transform: uppercase; }
+  .camp-btn { font-size: 22px; background: rgba(243,239,227,0.1); border: 1px solid rgba(243,239,227,0.3); border-radius: 6px; padding: 6px 10px; position: relative; }
+  .camp-badge { position: absolute; top: -6px; right: -6px; background: var(--amber); color: var(--ink); font-size: 10px; font-weight: 700; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; }
+
+  .tab-switch { display: flex; gap: 6px; margin-top: 16px; }
+  .tab-btn { flex: 1; padding: 10px 0; font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(243,239,227,0.55); border-bottom: 3px solid transparent; }
+  .tab-btn.active { color: var(--canvas); border-bottom-color: var(--khaki); }
+
+  .subtab-switch { display: flex; gap: 8px; margin: 14px 20px 0; }
+  .subtab-btn { padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; background: var(--canvas-dark); color: #766A4A; font-family: 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.04em; }
+  .subtab-btn.active { background: var(--forest); color: var(--canvas); }
+
+  .stats-row { display: flex; gap: 8px; padding: 14px 0 16px; }
+  .stat-chip { flex: 1; background: rgba(243,239,227,0.08); border: 1px solid rgba(243,239,227,0.25); border-radius: 3px; padding: 8px 8px; font-family: 'IBM Plex Mono', monospace; text-align: left; }
+  .stat-chip .n { font-size: 19px; font-weight: 600; display: block; line-height: 1.1; }
+  .stat-chip .l { font-size: 9.5px; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-chip.warn .n { color: var(--amber); }
+  .stat-chip.bad .n { color: #E9A79B; }
+  .stat-chip.clickable { position: relative; }
+  .stat-chip.active-filter { background: rgba(243,239,227,0.22); border-color: var(--khaki); }
+
+  .section { padding: 16px 20px 4px; }
+  .section-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--forest-light); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--khaki); opacity: 0.5; }
+  .section-label .clear-filter { font-size: 10px; color: var(--red); text-decoration: underline; text-transform: none; cursor: pointer; flex: none; }
+
+  /* Scanner */
+  .scan-panel { background: var(--ink); border-radius: 4px; padding: 12px; position: relative; }
+  #reader { width: 100%; border-radius: 3px; overflow: hidden; }
+  .scan-idle { aspect-ratio: 5/2; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--canvas-dark); gap: 8px; }
+  .scan-idle p { margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; opacity: 0.6; text-align: center; padding: 0 24px; }
+  .scan-btn-row { display: flex; gap: 8px; margin-top: 8px; }
+
+  .btn-primary { background: var(--forest); color: var(--canvas); font-weight: 700; font-size: 14px; padding: 12px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.03em; font-family: 'Oswald', sans-serif; flex: 1; }
+  .btn-primary.small { padding: 9px; font-size: 12.5px; }
+  .btn-stop { background: var(--red) !important; }
+  .btn-secondary { background: transparent; border: 1.5px solid var(--forest); color: var(--forest); font-weight: 600; font-size: 13px; padding: 10px; border-radius: 3px; flex: 1; }
+  .btn-block { width: 100%; margin-top: 8px; }
+
+  /* Category chips */
+  .chip-row { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; -ms-overflow-style: none; scrollbar-width: none; }
+  .chip-row::-webkit-scrollbar { display: none; }
+  .cat-chip { flex-shrink: 0; padding: 7px 13px; border-radius: 20px; background: #FBF9F2; border: 1px solid var(--khaki); font-size: 12.5px; font-weight: 600; color: #55503E; white-space: nowrap; }
+  .cat-chip.active { background: var(--forest); color: var(--canvas); border-color: var(--forest); }
+  .cat-chip.add-chip { background: var(--canvas-dark); color: var(--forest); border-style: dashed; }
+
+  .search-box { margin-top: 10px; }
+  .search-box input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--khaki); border-radius: 3px; background: #FBF9F2; font-size: 14px; }
+  .search-box input:focus { outline: none; border-color: var(--forest); }
+
+  .excel-row { display: flex; gap: 8px; margin-top: 12px; }
+
+  /* Manifest cards */
+  .crate { background: #FBF9F2; border: 1px solid var(--khaki); border-radius: 2px; margin-bottom: 10px; position: relative; box-shadow: 2px 2px 0 var(--tab-shadow); }
+  .crate::before { content: ''; position: absolute; top: -1px; left: 14px; width: 26px; height: 6px; background: var(--canvas); border-left: 1px solid var(--khaki); border-right: 1px solid var(--khaki); border-bottom: 1px solid var(--khaki); border-radius: 0 0 3px 3px; }
+  .crate-body { padding: 13px 14px 12px; }
+  .crate-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .crate-name { font-family: 'Oswald', sans-serif; font-size: 15.5px; font-weight: 600; margin: 0 0 2px; text-transform: uppercase; cursor: pointer; }
+  .crate-sub { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #766A4A; display: flex; gap: 8px; flex-wrap: wrap; }
+  .status-tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 7px; border-radius: 2px; white-space: nowrap; flex-shrink: 0; }
+  .status-ok { background: var(--green-bg); color: var(--green-ok); }
+  .status-warn { background: var(--amber-bg); color: var(--amber); }
+  .status-bad { background: var(--red-bg); color: var(--red); }
+  .camp-ribbon { margin-top: 8px; background: var(--blue-bg); color: var(--blue); font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 6px 9px; border-radius: 3px; }
+  .crate-meta { display: flex; gap: 16px; margin-top: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #55503E; }
+  .crate-meta b { color: var(--ink); font-weight: 600; }
+  .crate-actions { display: flex; gap: 7px; margin-top: 11px; }
+  .qty-btn { flex: 1; background: var(--canvas-dark); border-radius: 3px; padding: 8px 0; font-weight: 700; font-size: 13.5px; color: var(--forest); }
+  .icon-btn { background: transparent; color: #9C8E6E; font-size: 11px; font-family: 'IBM Plex Mono', monospace; text-decoration: underline; padding: 8px 6px; }
+  .icon-btn.del { color: var(--red); }
+
+  .empty-state { text-align: center; padding: 36px 20px; color: #8B8064; }
+  .empty-state p { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; margin: 8px 0 0; line-height: 1.5; }
+
+  /* Pendientes */
+  .pend-filters { display: flex; gap: 7px; margin-bottom: 4px; }
+  .pend-card { background: #FBF9F2; border: 1px solid var(--khaki); border-left: 4px solid var(--khaki); border-radius: 2px; padding: 12px 14px; margin-bottom: 10px; }
+  .pend-card.nuevo { border-left-color: var(--blue); }
+  .pend-card.proceso { border-left-color: var(--amber); }
+  .pend-card.cerrado { border-left-color: var(--green-ok); opacity: 0.7; }
+  .pend-top { display: flex; justify-content: space-between; gap: 10px; }
+  .pend-title { font-family: 'Oswald', sans-serif; font-size: 15px; font-weight: 600; margin: 0; text-transform: uppercase; cursor: pointer; }
+  .pend-desc { font-size: 13px; color: #55503E; margin: 6px 0 0; line-height: 1.4; }
+  .pend-meta { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #8B8064; margin-top: 8px; }
+  .estado-tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; white-space: nowrap; cursor: pointer; }
+  .estado-nuevo { background: var(--blue-bg); color: var(--blue); }
+  .estado-proceso { background: var(--amber-bg); color: var(--amber); }
+  .estado-cerrado { background: var(--green-bg); color: var(--green-ok); }
+  .pend-actions { display: flex; gap: 7px; margin-top: 10px; }
+
+  /* Modal / overlay */
+  .overlay { position: fixed; inset: 0; background: rgba(35,41,31,0.55); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+  .overlay.top-align { align-items: stretch; }
+  .modal { background: var(--canvas); width: 100%; max-width: 480px; margin: 0 auto; border-radius: 10px 10px 0 0; padding: 20px 20px 26px; border-top: 3px solid var(--forest); max-height: 92vh; overflow-y: auto; }
+  .modal.full { border-radius: 0; max-height: 100vh; min-height: 100vh; padding-top: 16px; }
+  .modal h2 { font-family: 'Oswald', sans-serif; text-transform: uppercase; font-size: 18px; margin: 0 0 3px; }
+  .modal .sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #766A4A; margin: 0 0 14px; }
+  .modal-close { position: absolute; right: 18px; top: 16px; font-size: 20px; color: #766A4A; background: none; }
+  label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--forest-light); margin-bottom: 5px; margin-top: 13px; }
+  input, textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--khaki); border-radius: 3px; background: #FBF9F2; font-size: 15px; color: var(--ink); }
+  textarea { resize: vertical; min-height: 60px; }
+  input:focus, textarea:focus { outline: none; border-color: var(--forest); }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-cancel { flex: 1; background: transparent; color: #766A4A; font-weight: 600; padding: 12px; }
+  .btn-save { flex: 2; background: var(--forest); color: var(--canvas); font-weight: 700; padding: 12px; border-radius: 3px; font-family: 'Oswald', sans-serif; text-transform: uppercase; }
+  .radio-row { display: flex; gap: 8px; margin-top: 6px; }
+  .radio-opt { flex: 1; text-align: center; padding: 10px; border: 1.5px solid var(--khaki); border-radius: 3px; font-size: 13px; font-weight: 600; color: #55503E; }
+  .radio-opt.active { background: var(--forest); color: var(--canvas); border-color: var(--forest); }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--canvas); padding: 10px 18px; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; z-index: 70; opacity: 0; transition: opacity 0.25s; pointer-events: none; max-width: 90%; text-align: center; }
+  .toast.show { opacity: 1; }
+
+  /* Camping builder */
+  .camp-trip-card { background: #FBF9F2; border: 1px solid var(--khaki); border-radius: 3px; padding: 12px 14px; margin-bottom: 10px; }
+  .camp-trip-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .camp-trip-name { font-family: 'Oswald', sans-serif; font-size: 15px; text-transform: uppercase; margin: 0; }
+  .camp-trip-dates { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #766A4A; margin-top: 3px; }
+  .camp-active-tag { background: var(--blue); color: var(--canvas); font-size: 10px; font-family: 'IBM Plex Mono', monospace; padding: 2px 7px; border-radius: 2px; text-transform: uppercase; }
+  .camp-item-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--canvas-dark); font-size: 13.5px; }
+  .camp-item-row:last-child { border-bottom: none; }
+  .camp-pick-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--canvas-dark); }
+  .camp-pick-info { font-size: 13.5px; }
+  .camp-pick-info .n { font-weight: 600; }
+  .camp-pick-info .d { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #766A4A; }
+  .camp-pick-controls { display: flex; align-items: center; gap: 8px; }
+  .stepper-btn { width: 28px; height: 28px; border-radius: 50%; background: var(--canvas-dark); font-weight: 700; color: var(--forest); }
+  .stepper-val { font-family: 'IBM Plex Mono', monospace; font-weight: 700; min-width: 20px; text-align: center; }
+  .step-nav { display: flex; gap: 8px; margin-top: 18px; }
+  .origin-toggle { display: flex; gap: 8px; margin: 10px 0; }
+  .origin-btn { flex: 1; padding: 8px; border-radius: 3px; border: 1.5px solid var(--khaki); font-size: 12.5px; font-weight: 600; text-align: center; }
+  .origin-btn.active { background: var(--forest); color: var(--canvas); border-color: var(--forest); }
+</style>
+</head>
+<body>
+<div id="loginScreen"></div>
+<button class="perm-btn" id="permBtn" title="">•</button>
+
+<div class="app" id="app" style="display:none;">
+
+  <header class="top">
+    <a href="https://lapringles-dirigentes.github.io/Intranet/" style="color: rgba(243,239,227,0.6); font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-decoration: none; display: inline-block; margin-bottom: 8px;">← IntraPringles</a>
+    <div class="header-row">
+      <div>
+        <p class="eyebrow">Grupo Scout Pringles · Barracas</p>
+        <h1 class="title">Stock La Pringles</h1>
+      </div>
+      <button class="camp-btn" id="campOpenBtn">🎒<span class="camp-badge" id="campBadge" style="display:none;">0</span></button>
+    </div>
+    <div class="tab-switch">
+      <button class="tab-btn active" data-tab="chino">Chino</button>
+      <button class="tab-btn" data-tab="panol">Pañol</button>
+    </div>
+    <div class="stats-row" id="statsRow"></div>
+  </header>
+
+  <div id="panolSubNav" style="display:none;">
+    <div class="subtab-switch">
+      <button class="subtab-btn active" data-sub="stock">Stock</button>
+      <button class="subtab-btn" data-sub="pendientes">Pendientes</button>
+    </div>
+  </div>
+
+  <div id="stockSection">
+    <div class="section" id="scanSection">
+      <p class="section-label">Escanear código</p>
+      <div class="scan-panel">
+        <div id="reader"></div>
+        <div class="scan-idle" id="scanIdle">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#A99A6B" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="21" y2="14"/><line x1="14" y1="21" x2="21" y2="21"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/></svg>
+          <p>Apuntá la cámara al código de barras</p>
+        </div>
+        <div class="scan-btn-row">
+          <button class="btn-primary" id="scanToggleBtn">Iniciar escaneo</button>
+          <button class="btn-secondary" id="manualBtn">Cargar manual</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="toolsSection">
+      <p class="section-label" id="catLabel">Categorías</p>
+      <div class="chip-row" id="catChips"></div>
+      <div class="search-box"><input type="text" id="searchInput" placeholder="Buscar producto..."></div>
+      <div class="excel-row">
+        <button class="btn-secondary" id="downloadTemplateBtn">⬇ Plantilla Excel</button>
+        <button class="btn-primary" id="uploadExcelBtn">⬆ Cargar Excel</button>
+        <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none;">
+      </div>
+    </div>
+
+    <div class="section" style="padding-top: 6px;">
+      <p class="section-label" id="listLabel">Manifiesto de stock<span class="clear-filter" id="clearVencerFilter" style="display:none;" onclick="toggleVencerView(false)">✕ salir de vista</span></p>
+    </div>
+    <div class="section" style="padding-top:0;" id="crateList"></div>
+  </div>
+
+  <div id="pendientesSection" style="display:none;">
+    <div class="section">
+      <button class="btn-primary btn-block" id="addPendienteBtn">+ Nuevo pendiente</button>
+      <div class="pend-filters" style="margin-top:12px;">
+        <div class="chip-row" id="pendFilterChips"></div>
+      </div>
+    </div>
+    <div class="section" style="padding-top:0;" id="pendList"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- STATE ---------------- */
+const state = {
+  activeTab: 'chino',
+  panolSub: 'stock',
+  chino: { productos: [], categorias: [], filtroCategoria: 'todas', busqueda: '', vistaVencer: false },
+  panol: { productos: [], categorias: [], filtroCategoria: 'todas', busqueda: '' },
+  pendientes: [],
+  pendFiltro: 'todos',
+  campamentos: []
+};
+const DEFAULT_CAT_CHINO = ['Alimentos', 'Bebidas', 'Golosinas', 'Otros'];
+const DEFAULT_CAT_PANOL = ['Limpieza', 'Útiles escolares', 'Ropa', 'Bazar', 'Campamento', 'Otros'];
+
+/* ---------------- FIREBASE ---------------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyDChfMLWjpHeHLhCcO8DtAfl_kn2ZvRvOM",
+  authDomain: "stockpringles-76394.firebaseapp.com",
+  projectId: "stockpringles-76394",
+  storageBucket: "stockpringles-76394.firebasestorage.app",
+  messagingSenderId: "395333679885",
+  appId: "1:395333679885:web:7ae61dcbba36fb9dde0e44"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ---------------- ACCESO Y PERMISOS ---------------- */
+const SUPER_ADMIN = 'alan.d.fernandez23@gmail.com';
+let usuarios = []; // [{email, rol:'admin'|'dirigente', agregadoPor, fecha}]
+let sesionEmail = null;
+let sesionEsAdmin = false;
+let unsubs = [];
+
+function esAdmin() { return sesionEsAdmin; }
+
+async function verificarAcceso(email) {
+  if (email === SUPER_ADMIN) return { ok: true, rol: 'admin' };
+  const snap = await db.collection('usuarios_autorizados').doc(email).get();
+  if (!snap.exists) return { ok: false, rol: null };
+  return { ok: true, rol: snap.data().rol };
+}
+
+auth.onAuthStateChanged(async (user) => {
+  unsubs.forEach(u => u());
+  unsubs = [];
+  if (!user || !user.email) { mostrarLogin(); return; }
+  const email = user.email.toLowerCase();
+  const acceso = await verificarAcceso(email);
+  if (!acceso.ok) {
+    await auth.signOut();
+    mostrarLogin('Tu email (' + email + ') todavía no tiene acceso. Pedile a un administrador que te habilite desde el botón de permisos.');
+    return;
+  }
+  sesionEmail = email;
+  sesionEsAdmin = acceso.rol === 'admin';
+  mostrarApp();
+});
+
+function mostrarLogin(mensajeInicial) {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('permBtn').style.display = 'none';
+  document.getElementById('loginScreen').innerHTML = `
+    <div class="login-screen">
+      <div class="login-box">
+        <p class="eyebrow">Grupo Scout Pringles · Barracas</p>
+        <h1>Stock La Pringles</h1>
+        <p class="lead">Acceso solo para dirigentes autorizados. Iniciá sesión con tu cuenta de Google.</p>
+        <button class="btn-primary" onclick="loginConGoogle()">Iniciar sesión con Google</button>
+        <p class="login-error ${mensajeInicial ? 'show' : ''}" id="loginError">${mensajeInicial || ''}</p>
+      </div>
+    </div>`;
+}
+function loginConGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(e => showToast('No se pudo iniciar sesión: ' + e.message));
+}
+function mostrarApp() {
+  document.getElementById('loginScreen').innerHTML = '';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('permBtn').style.display = 'flex';
+  iniciarEscuchas();
+}
+async function cerrarSesion() {
+  closeOverlay();
+  await auth.signOut();
+}
+
+/* ---------------- ESCUCHAS EN TIEMPO REAL (Firestore) ---------------- */
+function iniciarEscuchas() {
+  unsubs.push(db.collection('stock_chino').onSnapshot(snap => {
+    state.chino.productos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  }));
+  unsubs.push(db.collection('stock_panol').onSnapshot(snap => {
+    state.panol.productos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  }));
+  unsubs.push(db.collection('pendientes_panol').onSnapshot(snap => {
+    state.pendientes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  }));
+  unsubs.push(db.collection('campamentos').onSnapshot(snap => {
+    state.campamentos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  }));
+  unsubs.push(db.collection('config').doc('categorias_chino').onSnapshot(doc => {
+    state.chino.categorias = doc.exists && doc.data().lista ? doc.data().lista : DEFAULT_CAT_CHINO;
+    renderCatChips();
+  }));
+  unsubs.push(db.collection('config').doc('categorias_panol').onSnapshot(doc => {
+    state.panol.categorias = doc.exists && doc.data().lista ? doc.data().lista : DEFAULT_CAT_PANOL;
+    renderCatChips();
+  }));
+  unsubs.push(db.collection('usuarios_autorizados').onSnapshot(snap => {
+    usuarios = snap.docs.filter(d => d.id !== SUPER_ADMIN).map(d => ({ email: d.id, ...d.data() }));
+  }));
+  renderAll();
+}
+
+/* ---------------- PANEL DE PERMISOS ---------------- */
+document.getElementById('permBtn').addEventListener('click', () => openPermisosPanel());
+function openPermisosPanel() {
+  if (!esAdmin()) { showToast('Esta sección es solo para administradores'); return; }
+  const lista = [{ email: SUPER_ADMIN, rol: 'admin', fijo: true }, ...usuarios.filter(u => u.email !== SUPER_ADMIN)];
+  openOverlay(`
+    <div class="modal full">
+      <button class="modal-close" onclick="closeOverlay()">✕</button>
+      <h2>Permisos de acceso</h2>
+      <p class="sub">Quién puede entrar a Stock La Pringles</p>
+      <div class="session-bar">
+        <div>Conectado como<b>${escapeHtml(sesionEmail)}</b></div>
+        <button class="icon-btn" onclick="cerrarSesion()">Cerrar sesión</button>
+      </div>
+      <label>Agregar nuevo acceso</label>
+      <input type="email" id="inNuevoEmail" placeholder="email@gmail.com" autocapitalize="off">
+      <div class="radio-row">
+        <div class="radio-opt active" id="rolDirigenteOpt" onclick="setRolNuevo('dirigente')">Dirigente</div>
+        <div class="radio-opt" id="rolAdminOpt" onclick="setRolNuevo('admin')">Administrador</div>
+      </div>
+      <button class="btn-primary btn-block" onclick="agregarUsuario()">+ Dar acceso</button>
+
+      <p class="section-label" style="margin-top:22px;">Con acceso actualmente</p>
+      ${lista.map(u => `
+        <div class="perm-user-row">
+          <div class="perm-user-info">
+            <div class="e">${escapeHtml(u.email)}</div>
+            <div class="r">${u.rol === 'admin' ? 'Administrador' : 'Dirigente'}</div>
+          </div>
+          ${u.fijo ? '<span class="perm-locked">Fijo</span>' : `
+          <div class="perm-user-controls">
+            <button class="perm-mini-btn" onclick="cambiarRol('${escapeHtml(u.email)}')">${u.rol === 'admin' ? 'Bajar a dirigente' : 'Subir a admin'}</button>
+            <button class="perm-mini-btn del" onclick="quitarUsuario('${escapeHtml(u.email)}')">Quitar</button>
+          </div>`}
+        </div>
+      `).join('')}
+    </div>
+  `, true);
+}
+let rolNuevoSeleccionado = 'dirigente';
+function setRolNuevo(r) {
+  rolNuevoSeleccionado = r;
+  document.getElementById('rolDirigenteOpt').classList.toggle('active', r === 'dirigente');
+  document.getElementById('rolAdminOpt').classList.toggle('active', r === 'admin');
+}
+async function agregarUsuario() {
+  const val = document.getElementById('inNuevoEmail').value.trim().toLowerCase();
+  if (!val || !val.includes('@')) { showToast('Ingresá un email válido'); return; }
+  if (val === SUPER_ADMIN || usuarios.some(u => u.email === val)) { showToast('Ese email ya tiene acceso'); return; }
+  try {
+    await db.collection('usuarios_autorizados').doc(val).set({ rol: rolNuevoSeleccionado, agregadoPor: sesionEmail, fecha: Date.now() });
+    rolNuevoSeleccionado = 'dirigente';
+    openPermisosPanel();
+    showToast('Acceso otorgado a ' + val);
+  } catch (e) { showToast('No se pudo dar el acceso: ' + e.message); }
+}
+async function cambiarRol(email) {
+  const u = usuarios.find(x => x.email === email);
+  if (!u) return;
+  try {
+    await db.collection('usuarios_autorizados').doc(email).update({ rol: u.rol === 'admin' ? 'dirigente' : 'admin' });
+    openPermisosPanel();
+  } catch (e) { showToast('No se pudo cambiar el rol: ' + e.message); }
+}
+async function quitarUsuario(email) {
+  try {
+    await db.collection('usuarios_autorizados').doc(email).delete();
+    if (sesionEmail === email) { showToast('Le quitaste tu propio acceso'); cerrarSesion(); return; }
+    openPermisosPanel();
+    showToast('Acceso quitado');
+  } catch (e) { showToast('No se pudo quitar el acceso: ' + e.message); }
+}
+
+let scanning = false;
+let html5QrCode = null;
+let pendingCode = null;
+let editingProductoId = null;
+let editingPendienteId = null;
+let campBuilder = null; // { step, nombre, fechaInicio, fechaRetorno, items:[], origen, categoriaFiltro, busqueda, editingTripId }
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function todayStr() { const t = new Date(); t.setHours(0,0,0,0); return t; }
+function fmtDate(iso) { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric'}); }
+function daysUntil(dateStr) { const target = new Date(dateStr + 'T00:00:00'); return Math.round((target - todayStr()) / 86400000); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* ---------------- CAMPAMENTOS: reserva helpers ---------------- */
+function tripIsActive(trip) {
+  const hoy = todayStr();
+  return new Date(trip.fechaInicio + 'T00:00:00') <= hoy && hoy <= new Date(trip.fechaRetorno + 'T00:00:00');
+}
+function tripIsUpcomingOrActive(trip) {
+  const hoy = todayStr();
+  return new Date(trip.fechaRetorno + 'T00:00:00') >= hoy;
+}
+function reservedFuture(tab, productoId, excludeTripId) {
+  return state.campamentos.filter(t => t.id !== excludeTripId && tripIsUpcomingOrActive(t))
+    .flatMap(t => t.items).filter(it => it.origen === tab && it.productoId === productoId)
+    .reduce((s, it) => s + it.cantidad, 0);
+}
+function activeTripsFor(tab, productoId) {
+  return state.campamentos.filter(t => tripIsActive(t) && t.items.some(it => it.origen === tab && it.productoId === productoId));
+}
+
+/* ---------------- TABS ---------------- */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.activeTab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    stopScan();
+    if (state.activeTab === 'chino') {
+      document.getElementById('panolSubNav').style.display = 'none';
+      document.getElementById('stockSection').style.display = 'block';
+      document.getElementById('pendientesSection').style.display = 'none';
+    } else {
+      document.getElementById('panolSubNav').style.display = 'block';
+      togglePanolSub(state.panolSub);
+    }
+    renderAll();
+  });
+});
+document.querySelectorAll('.subtab-btn').forEach(btn => {
+  btn.addEventListener('click', () => togglePanolSub(btn.dataset.sub));
+});
+function togglePanolSub(sub) {
+  state.panolSub = sub;
+  document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.sub === sub));
+  document.getElementById('stockSection').style.display = sub === 'stock' ? 'block' : 'none';
+  document.getElementById('pendientesSection').style.display = sub === 'pendientes' ? 'block' : 'none';
+  renderAll();
+}
+
+/* ---------------- RENDER MASTER ---------------- */
+function renderAll() {
+  renderStats();
+  document.getElementById('scanSection').style.display = 'block';
+  document.getElementById('catLabel').textContent = state.activeTab === 'chino' ? 'Categorías — Chino' : 'Categorías — Pañol';
+  if (state.activeTab === 'panol' && state.panolSub === 'pendientes') {
+    renderPendientes();
+  } else {
+    renderCatChips();
+    renderList();
+  }
+  renderCampBadge();
+}
+
+function renderStats() {
+  const t = state[state.activeTab];
+  const total = t.productos.length;
+  const row = document.getElementById('statsRow');
+  if (state.activeTab === 'chino') {
+    const warn = t.productos.filter(p => p.vencimiento && daysUntil(p.vencimiento) <= 45).length;
+    const bad = t.productos.filter(p => p.vencimiento && daysUntil(p.vencimiento) < 0).length;
+    row.innerHTML = `
+      <div class="stat-chip"><span class="n">${total}</span><span class="l">Productos</span></div>
+      <div class="stat-chip warn clickable ${state.chino.vistaVencer ? 'active-filter' : ''}" id="statVencer"><span class="n">${warn}</span><span class="l">Por vencer</span></div>
+      <div class="stat-chip bad"><span class="n">${bad}</span><span class="l">Vencidos</span></div>`;
+    document.getElementById('statVencer').onclick = () => toggleVencerView(!state.chino.vistaVencer);
+  } else if (state.panolSub === 'stock') {
+    row.innerHTML = `
+      <div class="stat-chip"><span class="n">${total}</span><span class="l">Productos</span></div>
+      <div class="stat-chip"><span class="n">${t.categorias.length}</span><span class="l">Categorías</span></div>
+      <div class="stat-chip warn"><span class="n">${state.pendientes.filter(p=>p.estado!=='cerrado').length}</span><span class="l">Pendientes</span></div>`;
+  } else {
+    const nuevo = state.pendientes.filter(p=>p.estado==='nuevo').length;
+    const proceso = state.pendientes.filter(p=>p.estado==='proceso').length;
+    const cerrado = state.pendientes.filter(p=>p.estado==='cerrado').length;
+    row.innerHTML = `
+      <div class="stat-chip"><span class="n">${nuevo}</span><span class="l">Nuevos</span></div>
+      <div class="stat-chip warn"><span class="n">${proceso}</span><span class="l">En proceso</span></div>
+      <div class="stat-chip"><span class="n">${cerrado}</span><span class="l">Cerrados</span></div>`;
+  }
+}
+
+function toggleVencerView(on) {
+  state.chino.vistaVencer = on;
+  document.getElementById('clearVencerFilter').style.display = on ? 'inline' : 'none';
+  document.getElementById('toolsSection').style.display = on ? 'none' : 'block';
+  renderAll();
+}
+
+function renderCampBadge() {
+  const hoy = todayStr();
+  const activos = state.campamentos.filter(tripIsActive).length;
+  const badge = document.getElementById('campBadge');
+  if (activos > 0) { badge.style.display = 'flex'; badge.textContent = activos; }
+  else badge.style.display = 'none';
+}
+
+/* ---------------- CATEGORY CHIPS ---------------- */
+function renderCatChips() {
+  const t = state[state.activeTab];
+  const chips = document.getElementById('catChips');
+  let html = `<button class="cat-chip ${t.filtroCategoria==='todas'?'active':''}" onclick="setCategoria('todas')">Todas</button>`;
+  t.categorias.forEach(c => {
+    html += `<button class="cat-chip ${t.filtroCategoria===c?'active':''}" onclick="setCategoria('${escapeHtml(c)}')">${escapeHtml(c)}</button>`;
+  });
+  html += `<button class="cat-chip add-chip" onclick="openCategoriaModal()">+ Categoría</button>`;
+  chips.innerHTML = html;
+}
+function setCategoria(c) { state[state.activeTab].filtroCategoria = c; renderList(); renderCatChips(); }
+
+function openCategoriaModal() {
+  const tabLabel = state.activeTab === 'chino' ? 'Chino' : 'Pañol';
+  openOverlay(`
+    <div class="modal">
+      <h2>Nueva categoría — ${tabLabel}</h2>
+      <p class="sub">Se agrega a la lista pública de esta solapa</p>
+      <label>Nombre de la categoría</label>
+      <input type="text" id="inCatNombre" placeholder="Ej: Limpieza">
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeOverlay()">Cancelar</button>
+        <button class="btn-save" onclick="confirmCategoria()">Agregar</button>
+      </div>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('inCatNombre').focus(), 100);
+}
+async function confirmCategoria() {
+  const val = document.getElementById('inCatNombre').value.trim();
+  if (!val) { showToast('Escribí un nombre'); return; }
+  const t = state[state.activeTab];
+  if (t.categorias.some(c => c.toLowerCase() === val.toLowerCase())) { showToast('Esa categoría ya existe'); return; }
+  try {
+    const ref = db.collection('config').doc(state.activeTab === 'chino' ? 'categorias_chino' : 'categorias_panol');
+    await ref.set({ lista: firebase.firestore.FieldValue.arrayUnion(val) }, { merge: true });
+    closeOverlay();
+    showToast('Categoría agregada');
+  } catch (e) { showToast('No se pudo agregar: ' + e.message); }
+}
+
+/* ---------------- SEARCH ---------------- */
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  state[state.activeTab].busqueda = e.target.value.toLowerCase();
+  renderList();
+});
+
+/* ---------------- LIST RENDER ---------------- */
+function statusOf(dateStr) { const d = daysUntil(dateStr); if (d < 0) return 'bad'; if (d <= 45) return 'warn'; return 'ok'; }
+function statusLabel(dateStr) { const d = daysUntil(dateStr); if (d < 0) return `Vencido hace ${Math.abs(d)}d`; if (d === 0) return 'Vence hoy'; if (d <= 45) return `Vence en ${d}d`; return 'OK'; }
+
+function renderList() {
+  const isChino = state.activeTab === 'chino';
+  const t = state[state.activeTab];
+  let items = [...t.productos];
+
+  if (isChino && t.vistaVencer) {
+    items = items.filter(p => p.vencimiento && daysUntil(p.vencimiento) <= 45);
+    items.sort((a,b) => new Date(a.vencimiento) - new Date(b.vencimiento));
+    document.getElementById('listLabel').childNodes[0].textContent = 'Próximos a vencer (45 días) ';
+  } else {
+    if (t.filtroCategoria !== 'todas') items = items.filter(p => p.categoria === t.filtroCategoria);
+    if (t.busqueda) items = items.filter(p => p.nombre.toLowerCase().includes(t.busqueda) || (p.codigo||'').includes(t.busqueda));
+    items.sort((a,b) => {
+      if (isChino) {
+        if (a.vencimiento && b.vencimiento) return new Date(a.vencimiento) - new Date(b.vencimiento);
+        if (a.vencimiento) return -1;
+        if (b.vencimiento) return 1;
+      }
+      return a.nombre.localeCompare(b.nombre);
+    });
+    document.getElementById('listLabel').childNodes[0].textContent = 'Manifiesto de stock ';
+  }
+
+  const list = document.getElementById('crateList');
+  if (items.length === 0) {
+    list.innerHTML = `<div class="empty-state">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#A99A6B" stroke-width="1.5"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>
+      <p>No hay productos para mostrar${t.vistaVencer ? ' en esta vista' : ' con este filtro'}.</p>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(p => {
+    const activos = activeTripsFor(state.activeTab, p.id);
+    let ribbon = '';
+    if (activos.length > 0) {
+      const nombres = activos.map(t2 => `${escapeHtml(t2.nombre)} (hasta ${fmtDate(t2.fechaRetorno)})`).join(', ');
+      const cant = activos.flatMap(t2=>t2.items).filter(it=>it.origen===state.activeTab && it.productoId===p.id).reduce((s,it)=>s+it.cantidad,0);
+      ribbon = `<div class="camp-ribbon">🎒 ${cant} unidad(es) en la mochila de campamento: ${nombres}</div>`;
+    }
+    let statusTag = '';
+    let vencInfo = '';
+    if (isChino && p.vencimiento) {
+      const st = statusOf(p.vencimiento);
+      const cls = st === 'ok' ? 'status-ok' : st === 'warn' ? 'status-warn' : 'status-bad';
+      statusTag = `<span class="status-tag ${cls}">${statusLabel(p.vencimiento)}</span>`;
+      vencInfo = `<span>Vence: <b>${fmtDate(p.vencimiento)}</b></span>`;
+    }
+    return `
+    <div class="crate">
+      <div class="crate-body">
+        <div class="crate-top">
+          <div>
+            <p class="crate-name" onclick="openProductoModal('${state.activeTab}', '${p.id}')">${escapeHtml(p.nombre)}</p>
+            <div class="crate-sub"><span>${escapeHtml(p.categoria || 'Sin categoría')}</span>${p.codigo ? `<span>· ${escapeHtml(p.codigo)}</span>` : ''}</div>
+          </div>
+          ${statusTag}
+        </div>
+        <div class="crate-meta"><span>Cant: <b>${p.cantidad}</b></span>${vencInfo}</div>
+        ${ribbon}
+        <div class="crate-actions">
+          <button class="qty-btn" onclick="adjustQty('${state.activeTab}', '${p.id}', -1)">− Usar 1</button>
+          <button class="qty-btn" onclick="adjustQty('${state.activeTab}', '${p.id}', 1)">+ Sumar 1</button>
+          <button class="icon-btn del" onclick="deleteProducto('${state.activeTab}', '${p.id}')">Eliminar</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function adjustQty(tab, id, delta) {
+  const col = tab === 'chino' ? 'stock_chino' : 'stock_panol';
+  const p = state[tab].productos.find(x => x.id === id);
+  if (!p) return;
+  const nueva = Math.max(0, p.cantidad + delta);
+  try {
+    if (nueva === 0) {
+      await db.collection(col).doc(id).delete();
+      showToast('Producto sin stock, se quitó del manifiesto');
+    } else {
+      await db.collection(col).doc(id).update({ cantidad: nueva });
+    }
+  } catch (e) { showToast('No se pudo guardar: ' + e.message); }
+}
+async function deleteProducto(tab, id) {
+  const col = tab === 'chino' ? 'stock_chino' : 'stock_panol';
+  try {
+    await db.collection(col).doc(id).delete();
+    showToast('Producto eliminado');
+  } catch (e) { showToast('No se pudo eliminar: ' + e.message); }
+}
+
+/* ---------------- PRODUCT MODAL (add/edit) ---------------- */
+function openProductoModal(tab, id, codigoSugerido, nombreSugerido) {
+  editingProductoId = id || null;
+  const t = state[tab];
+  const existing = id ? t.productos.find(p => p.id === id) : null;
+  const isChino = tab === 'chino';
+  const catOptions = t.categorias.map(c => `<option value="${escapeHtml(c)}" ${existing && existing.categoria===c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  openOverlay(`
+    <div class="modal">
+      <h2>${existing ? 'Editar producto' : 'Cargar producto'} — ${isChino ? 'Chino' : 'Pañol'}</h2>
+      <p class="sub">${(existing && existing.codigo) || codigoSugerido ? 'Código: ' + escapeHtml((existing && existing.codigo) || codigoSugerido) : 'Sin código de barras'}</p>
+      <label>Nombre del producto</label>
+      <input type="text" id="inNombre" placeholder="Ej: Arroz 1kg" value="${escapeHtml((existing && existing.nombre) || nombreSugerido || '')}">
+      <label>Categoría</label>
+      <select id="inCategoria" style="width:100%; padding:10px 12px; border:1.5px solid var(--khaki); border-radius:3px; background:#FBF9F2; font-size:15px;">
+        <option value="">Elegir...</option>${catOptions}
+      </select>
+      <label>Cantidad</label>
+      <input type="number" id="inCantidad" min="0" value="${existing ? existing.cantidad : 1}">
+      ${isChino ? `<label>Fecha de vencimiento ${existing ? '' : '(dejar vacío si no es perecedero)'}</label><input type="date" id="inVencimiento" value="${existing && existing.vencimiento ? existing.vencimiento : ''}">` : ''}
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeOverlay()">Cancelar</button>
+        <button class="btn-save" onclick='confirmProducto("${tab}", ${JSON.stringify((existing && existing.codigo) || codigoSugerido || '')})'>Guardar</button>
+      </div>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('inNombre').focus(), 100);
+}
+async function confirmProducto(tab, codigo) {
+  const nombre = document.getElementById('inNombre').value.trim();
+  const categoria = document.getElementById('inCategoria').value;
+  const cantidad = parseInt(document.getElementById('inCantidad').value, 10);
+  const vencEl = document.getElementById('inVencimiento');
+  const vencimiento = vencEl ? vencEl.value : '';
+
+  if (!nombre) { showToast('Falta el nombre del producto'); return; }
+  if (!categoria) { showToast('Elegí una categoría'); return; }
+  if (isNaN(cantidad) || cantidad < 0) { showToast('Cantidad inválida'); return; }
+
+  const col = tab === 'chino' ? 'stock_chino' : 'stock_panol';
+  const data = { codigo: codigo || '', nombre, categoria, cantidad, vencimiento: vencEl ? (vencimiento || null) : null };
+  try {
+    if (editingProductoId) {
+      await db.collection(col).doc(editingProductoId).update(data);
+      showToast('Producto actualizado');
+    } else {
+      await db.collection(col).add(data);
+      showToast('Producto agregado al manifiesto');
+    }
+    editingProductoId = null;
+    closeOverlay();
+  } catch (e) { showToast('No se pudo guardar: ' + e.message); }
+}
+
+/* ---------------- OVERLAY HELPERS ---------------- */
+function openOverlay(html, topAlign) {
+  closeOverlay();
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay' + (topAlign ? ' top-align' : '');
+  overlay.id = 'overlay';
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+}
+function closeOverlay() { const o = document.getElementById('overlay'); if (o) o.remove(); }
+
+/* ---------------- SCANNER ---------------- */
+const scanToggleBtn = document.getElementById('scanToggleBtn');
+const scanIdle = document.getElementById('scanIdle');
+const readerEl = document.getElementById('reader');
+scanToggleBtn.addEventListener('click', () => { if (!scanning) startScan(); else stopScan(); });
+document.getElementById('manualBtn').addEventListener('click', () => openProductoModal(state.activeTab));
+
+function startScan() {
+  if (typeof Html5Qrcode === 'undefined') { showToast('No se pudo cargar la cámara. Cargá manual.'); return; }
+  scanIdle.style.display = 'none';
+  readerEl.style.display = 'block';
+  scanToggleBtn.textContent = 'Detener escaneo';
+  scanToggleBtn.classList.add('btn-stop');
+  scanning = true;
+  html5QrCode = new Html5Qrcode('reader');
+  html5QrCode.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 230, height: 130 } },
+    (decodedText) => onCodeScanned(decodedText),
+    () => {}
+  ).catch(() => { showToast('No se pudo acceder a la cámara. Revisá permisos.'); stopScan(); });
+}
+function stopScan() {
+  if (!scanning) return;
+  scanning = false;
+  scanToggleBtn.textContent = 'Iniciar escaneo';
+  scanToggleBtn.classList.remove('btn-stop');
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => { readerEl.style.display = 'none'; scanIdle.style.display = 'flex'; html5QrCode.clear(); }).catch(() => { readerEl.style.display = 'none'; scanIdle.style.display = 'flex'; });
+  } else { readerEl.style.display = 'none'; scanIdle.style.display = 'flex'; }
+}
+function onCodeScanned(code) {
+  stopScan();
+  const existing = state[state.activeTab].productos.find(p => p.codigo === code);
+  if (existing) openProductoModal(state.activeTab, existing.id);
+  else openProductoModal(state.activeTab, null, code);
+}
+
+/* ---------------- EXCEL: PLANTILLA Y CARGA ---------------- */
+document.getElementById('downloadTemplateBtn').addEventListener('click', () => {
+  const isChino = state.activeTab === 'chino';
+  const headers = isChino
+    ? ['codigo','nombre','categoria','cantidad','accion','vencimiento(DD/MM/AAAA)']
+    : ['codigo','nombre','categoria','cantidad','accion'];
+  const example = isChino
+    ? ['7791234567890','Arroz 1kg','Alimentos',10,'suma','15/09/2026']
+    : ['','Detergente 500ml','Limpieza',5,'suma'];
+  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  ws['!cols'] = headers.map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, isChino ? 'Chino' : 'Pañol');
+  XLSX.writeFile(wb, `plantilla-stock-${isChino ? 'chino' : 'panol'}.xlsx`);
+  showToast('Plantilla descargada');
+});
+
+document.getElementById('uploadExcelBtn').addEventListener('click', () => document.getElementById('excelFileInput').click());
+document.getElementById('excelFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const isChino = state.activeTab === 'chino';
+  try {
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    let sumadas = 0, restadas = 0, eliminadas = 0, errores = 0;
+    const col = isChino ? 'stock_chino' : 'stock_panol';
+    const list = state[isChino ? 'chino' : 'panol'].productos; // snapshot actual, para matchear existentes
+    const categoriasNuevas = new Set();
+    const batch = db.batch();
+
+    rows.forEach(row => {
+      const codigo = String(row.codigo || '').trim();
+      const nombre = String(row.nombre || '').trim();
+      const categoria = String(row.categoria || '').trim();
+      const cantidad = parseInt(row.cantidad, 10);
+      const accion = String(row.accion || '').trim().toLowerCase();
+      if (!nombre || isNaN(cantidad) || cantidad <= 0 || (accion !== 'suma' && accion !== 'resta')) { errores++; return; }
+
+      let vencimiento = null;
+      if (isChino) {
+        const raw = row['vencimiento(DD/MM/AAAA)'] || row.vencimiento;
+        if (raw) {
+          if (typeof raw === 'string' && raw.includes('/')) {
+            const [d, m, y] = raw.split('/');
+            if (d && m && y) vencimiento = `${y.length===2?'20'+y:y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+          } else if (raw instanceof Date) {
+            vencimiento = raw.toISOString().slice(0,10);
+          }
+        }
+      }
+
+      if (categoria) categoriasNuevas.add(categoria);
+      const existing = list.find(p => (codigo && p.codigo === codigo) || (!codigo && p.nombre.toLowerCase() === nombre.toLowerCase()));
+
+      if (accion === 'suma') {
+        if (existing) {
+          const upd = { cantidad: existing.cantidad + cantidad };
+          if (vencimiento) upd.vencimiento = vencimiento;
+          batch.update(db.collection(col).doc(existing.id), upd);
+        } else {
+          batch.set(db.collection(col).doc(), { codigo, nombre, categoria: categoria || 'Otros', cantidad, vencimiento: isChino ? vencimiento : null });
+        }
+        sumadas++;
+      } else {
+        if (!existing) { errores++; return; }
+        const nuevaCant = Math.max(0, existing.cantidad - cantidad);
+        if (nuevaCant === 0) { batch.delete(db.collection(col).doc(existing.id)); eliminadas++; }
+        else batch.update(db.collection(col).doc(existing.id), { cantidad: nuevaCant });
+        restadas++;
+      }
+    });
+
+    await batch.commit();
+    if (categoriasNuevas.size > 0) {
+      const catRef = db.collection('config').doc(isChino ? 'categorias_chino' : 'categorias_panol');
+      await catRef.set({ lista: firebase.firestore.FieldValue.arrayUnion(...categoriasNuevas) }, { merge: true });
+    }
+    showToast(`Excel procesado: ${sumadas} entradas, ${restadas} salidas${eliminadas ? `, ${eliminadas} agotados` : ''}${errores ? `, ${errores} filas con error` : ''}`);
+  } catch (err) {
+    showToast('No se pudo leer el archivo. Verificá el formato.');
+  }
+  e.target.value = '';
+});
+
+/* ---------------- PENDIENTES (Pañol) ---------------- */
+document.getElementById('addPendienteBtn').addEventListener('click', () => openPendienteModal());
+function renderPendFilterChips() {
+  const filters = [['todos','Todos'],['nuevo','Nuevo'],['proceso','En proceso'],['cerrado','Cerrado']];
+  document.getElementById('pendFilterChips').innerHTML = filters.map(([v,l]) =>
+    `<button class="cat-chip ${state.pendFiltro===v?'active':''}" onclick="setPendFiltro('${v}')">${l}</button>`
+  ).join('');
+}
+function setPendFiltro(v) { state.pendFiltro = v; renderPendientes(); }
+
+function renderPendientes() {
+  renderPendFilterChips();
+  let items = [...state.pendientes];
+  if (state.pendFiltro !== 'todos') items = items.filter(p => p.estado === state.pendFiltro);
+  items.sort((a,b) => (a.estado==='cerrado') - (b.estado==='cerrado') || b.creado - a.creado);
+  const list = document.getElementById('pendList');
+  if (items.length === 0) {
+    list.innerHTML = `<div class="empty-state"><p>No hay pendientes en esta vista.<br>Usá "+ Nuevo pendiente" para anotar una tarea del pañol.</p></div>`;
+    return;
+  }
+  list.innerHTML = items.map(p => `
+    <div class="pend-card ${p.estado}">
+      <div class="pend-top">
+        <p class="pend-title" onclick="openPendienteModal('${p.id}')">${escapeHtml(p.titulo)}</p>
+        <span class="estado-tag estado-${p.estado}" onclick="cycleEstado('${p.id}')">${p.estado === 'proceso' ? 'En proceso' : p.estado}</span>
+      </div>
+      ${p.descripcion ? `<p class="pend-desc">${escapeHtml(p.descripcion)}</p>` : ''}
+      <p class="pend-meta">Cargado ${new Date(p.creado).toLocaleDateString('es-AR')}</p>
+      <div class="pend-actions">
+        <button class="icon-btn" onclick="openPendienteModal('${p.id}')">Editar</button>
+        <button class="icon-btn del" onclick="deletePendiente('${p.id}')">Eliminar</button>
+      </div>
+    </div>
+  `).join('');
+}
+async function cycleEstado(id) {
+  const p = state.pendientes.find(x => x.id === id);
+  const orden = ['nuevo','proceso','cerrado'];
+  const nuevoEstado = orden[(orden.indexOf(p.estado) + 1) % orden.length];
+  try { await db.collection('pendientes_panol').doc(id).update({ estado: nuevoEstado }); }
+  catch (e) { showToast('No se pudo actualizar: ' + e.message); }
+}
+function openPendienteModal(id) {
+  editingPendienteId = id || null;
+  const existing = id ? state.pendientes.find(p => p.id === id) : null;
+  openOverlay(`
+    <div class="modal">
+      <h2>${existing ? 'Editar pendiente' : 'Nuevo pendiente'} — Pañol</h2>
+      <label>Título</label>
+      <input type="text" id="inPendTitulo" placeholder="Ej: Reparar carpa 4 plazas" value="${escapeHtml(existing ? existing.titulo : '')}">
+      <label>Descripción</label>
+      <textarea id="inPendDesc" placeholder="Detalle opcional...">${escapeHtml(existing ? existing.descripcion : '')}</textarea>
+      <label>Estado</label>
+      <div class="radio-row" id="pendEstadoRow">
+        ${['nuevo','proceso','cerrado'].map(e => `<div class="radio-opt ${(existing ? existing.estado : 'nuevo')===e?'active':''}" data-estado="${e}" onclick="selectEstadoRadio('${e}')">${e==='proceso'?'En proceso':e.charAt(0).toUpperCase()+e.slice(1)}</div>`).join('')}
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeOverlay()">Cancelar</button>
+        <button class="btn-save" onclick="confirmPendiente()">Guardar</button>
+      </div>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('inPendTitulo').focus(), 100);
+}
+function selectEstadoRadio(e) {
+  document.querySelectorAll('#pendEstadoRow .radio-opt').forEach(el => el.classList.toggle('active', el.dataset.estado === e));
+}
+async function confirmPendiente() {
+  const titulo = document.getElementById('inPendTitulo').value.trim();
+  const descripcion = document.getElementById('inPendDesc').value.trim();
+  const estadoEl = document.querySelector('#pendEstadoRow .radio-opt.active');
+  const estado = estadoEl ? estadoEl.dataset.estado : 'nuevo';
+  if (!titulo) { showToast('Falta el título'); return; }
+  try {
+    if (editingPendienteId) {
+      await db.collection('pendientes_panol').doc(editingPendienteId).update({ titulo, descripcion, estado });
+    } else {
+      await db.collection('pendientes_panol').add({ titulo, descripcion, estado, creado: Date.now() });
+    }
+    editingPendienteId = null;
+    closeOverlay();
+    showToast('Pendiente guardado');
+  } catch (e) { showToast('No se pudo guardar: ' + e.message); }
+}
+async function deletePendiente(id) {
+  try {
+    await db.collection('pendientes_panol').doc(id).delete();
+    showToast('Pendiente eliminado');
+  } catch (e) { showToast('No se pudo eliminar: ' + e.message); }
+}
+
+/* ---------------- CAMPAMENTOS ---------------- */
+document.getElementById('campOpenBtn').addEventListener('click', () => openCampListaModal());
+
+function openCampListaModal() {
+  const trips = [...state.campamentos].sort((a,b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
+  openOverlay(`
+    <div class="modal full">
+      <button class="modal-close" onclick="closeOverlay()">✕</button>
+      <h2>Campamentos</h2>
+      <p class="sub">Listas de stock separado para salidas</p>
+      <button class="btn-primary btn-block" onclick="openCampBuilder()">+ Nuevo campamento</button>
+      <div style="margin-top:16px;">
+        ${trips.length === 0 ? `<div class="empty-state"><p>Todavía no armaste ninguna lista de campamento.</p></div>` : trips.map(t => {
+          const activo = tripIsActive(t);
+          const totalItems = t.items.reduce((s,it)=>s+it.cantidad,0);
+          return `<div class="camp-trip-card">
+            <div class="camp-trip-top">
+              <div>
+                <p class="camp-trip-name">${escapeHtml(t.nombre)}</p>
+                <p class="camp-trip-dates">${fmtDate(t.fechaInicio)} → ${fmtDate(t.fechaRetorno)} · ${totalItems} unidades</p>
+              </div>
+              ${activo ? '<span class="camp-active-tag">En curso</span>' : ''}
+            </div>
+            <div class="pend-actions">
+              <button class="icon-btn" onclick="viewCampTrip('${t.id}')">Ver lista</button>
+              <button class="icon-btn del" onclick="deleteCampTrip('${t.id}')">Eliminar</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `, true);
+}
+function viewCampTrip(id) {
+  const t = state.campamentos.find(x => x.id === id);
+  openOverlay(`
+    <div class="modal full">
+      <button class="modal-close" onclick="openCampListaModal()">✕</button>
+      <h2>${escapeHtml(t.nombre)}</h2>
+      <p class="sub">${fmtDate(t.fechaInicio)} → ${fmtDate(t.fechaRetorno)}</p>
+      <div style="margin-top:10px;">
+        ${t.items.map(it => `<div class="camp-item-row"><span>${escapeHtml(it.nombre)} <span style="color:#8B8064; font-family:'IBM Plex Mono',monospace; font-size:11px;">(${it.origen === 'chino' ? 'Chino' : 'Pañol'})</span></span><b>${it.cantidad}</b></div>`).join('')}
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="openCampListaModal()">Volver</button>
+      </div>
+    </div>
+  `, true);
+}
+async function deleteCampTrip(id) {
+  try {
+    await db.collection('campamentos').doc(id).delete();
+    openCampListaModal();
+    showToast('Campamento eliminado');
+  } catch (e) { showToast('No se pudo eliminar: ' + e.message); }
+}
+
+function openCampBuilder() {
+  campBuilder = { step: 1, nombre: '', fechaInicio: '', fechaRetorno: '', items: [], origen: 'chino', categoriaFiltro: 'todas', busqueda: '' };
+  renderCampBuilderStep1();
+}
+function renderCampBuilderStep1() {
+  openOverlay(`
+    <div class="modal full">
+      <button class="modal-close" onclick="openCampListaModal()">✕</button>
+      <h2>Nuevo campamento</h2>
+      <p class="sub">Paso 1 de 2 — Datos de la salida</p>
+      <label>Nombre del campamento</label>
+      <input type="text" id="cbNombre" placeholder="Ej: Campamento de invierno" value="${escapeHtml(campBuilder.nombre)}">
+      <label>Fecha de salida</label>
+      <input type="date" id="cbInicio" value="${campBuilder.fechaInicio}">
+      <label>Fecha de retorno</label>
+      <input type="date" id="cbRetorno" value="${campBuilder.fechaRetorno}">
+      <div class="step-nav">
+        <button class="btn-cancel" onclick="openCampListaModal()">Cancelar</button>
+        <button class="btn-save" onclick="campStep1Next()">Elegir productos →</button>
+      </div>
+    </div>
+  `, true);
+}
+function campStep1Next() {
+  const nombre = document.getElementById('cbNombre').value.trim();
+  const fechaInicio = document.getElementById('cbInicio').value;
+  const fechaRetorno = document.getElementById('cbRetorno').value;
+  if (!nombre) { showToast('Falta el nombre del campamento'); return; }
+  if (!fechaInicio || !fechaRetorno) { showToast('Completá ambas fechas'); return; }
+  if (new Date(fechaRetorno) < new Date(fechaInicio)) { showToast('La fecha de retorno no puede ser anterior a la salida'); return; }
+  campBuilder.nombre = nombre; campBuilder.fechaInicio = fechaInicio; campBuilder.fechaRetorno = fechaRetorno;
+  campBuilder.step = 2;
+  renderCampBuilderStep2();
+}
+function renderCampBuilderStep2() {
+  const origen = campBuilder.origen;
+  const productos = state[origen].productos;
+  const categorias = state[origen].categorias;
+  let list = productos.filter(p => {
+    if (campBuilder.categoriaFiltro !== 'todas' && p.categoria !== campBuilder.categoriaFiltro) return false;
+    if (campBuilder.busqueda && !p.nombre.toLowerCase().includes(campBuilder.busqueda)) return false;
+    return true;
+  });
+  const chipCats = `<button class="cat-chip ${campBuilder.categoriaFiltro==='todas'?'active':''}" onclick="campSetCat('todas')">Todas</button>` +
+    categorias.map(c => `<button class="cat-chip ${campBuilder.categoriaFiltro===c?'active':''}" onclick="campSetCat('${escapeHtml(c)}')">${escapeHtml(c)}</button>`).join('');
+
+  openOverlay(`
+    <div class="modal full">
+      <button class="modal-close" onclick="openCampListaModal()">✕</button>
+      <h2>${escapeHtml(campBuilder.nombre)}</h2>
+      <p class="sub">Paso 2 de 2 — Elegí qué se separa (${campBuilder.items.reduce((s,i)=>s+i.cantidad,0)} unidades seleccionadas)</p>
+      <div class="origin-toggle">
+        <button class="origin-btn ${origen==='chino'?'active':''}" onclick="campSetOrigen('chino')">Chino</button>
+        <button class="origin-btn ${origen==='panol'?'active':''}" onclick="campSetOrigen('panol')">Pañol</button>
+      </div>
+      <div class="chip-row">${chipCats}</div>
+      <div class="search-box"><input type="text" id="cbBusqueda" placeholder="Buscar producto..." value="${escapeHtml(campBuilder.busqueda)}"></div>
+      <div style="margin-top:10px;">
+        ${list.length === 0 ? `<div class="empty-state"><p>No hay productos con ese filtro en ${origen === 'chino' ? 'Chino' : 'Pañol'}.</p></div>` : list.map(p => {
+          const reservadoOtros = reservedFuture(origen, p.id, campBuilder._editingTripId || null);
+          const disponible = p.cantidad - reservadoOtros;
+          const yaElegido = campBuilder.items.find(it => it.productoId === p.id && it.origen === origen);
+          const cant = yaElegido ? yaElegido.cantidad : 0;
+          return `<div class="camp-pick-row">
+            <div class="camp-pick-info">
+              <div class="n">${escapeHtml(p.nombre)}</div>
+              <div class="d">Disponible: ${Math.max(0,disponible)}${reservadoOtros>0 ? ` (${reservadoOtros} ya reservado)` : ''}</div>
+            </div>
+            <div class="camp-pick-controls">
+              <button class="stepper-btn" onclick="campAdjustItem('${origen}','${p.id}','${escapeHtml(p.nombre)}', -1)">−</button>
+              <span class="stepper-val">${cant}</span>
+              <button class="stepper-btn" onclick="campAdjustItem('${origen}','${p.id}','${escapeHtml(p.nombre)}', 1)">+</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="step-nav">
+        <button class="btn-cancel" onclick="campBuilder.step=1; renderCampBuilderStep1();">← Atrás</button>
+        <button class="btn-save" onclick="confirmCampBuilder()">Guardar lista</button>
+      </div>
+    </div>
+  `, true);
+  setTimeout(() => {
+    const el = document.getElementById('cbBusqueda');
+    if (el) el.addEventListener('input', (e) => { campBuilder.busqueda = e.target.value.toLowerCase(); renderCampBuilderStep2(); });
+  }, 50);
+}
+function campSetCat(c) { campBuilder.categoriaFiltro = c; renderCampBuilderStep2(); }
+function campSetOrigen(o) { campBuilder.origen = o; campBuilder.categoriaFiltro = 'todas'; renderCampBuilderStep2(); }
+function campAdjustItem(origen, productoId, nombre, delta) {
+  const producto = state[origen].productos.find(p => p.id === productoId);
+  const reservadoOtros = reservedFuture(origen, productoId, campBuilder._editingTripId || null);
+  const disponible = producto.cantidad - reservadoOtros;
+  let item = campBuilder.items.find(it => it.productoId === productoId && it.origen === origen);
+  const current = item ? item.cantidad : 0;
+  const next = current + delta;
+  if (next > disponible) { showToast('No hay más stock disponible de ese producto'); return; }
+  if (next <= 0) { campBuilder.items = campBuilder.items.filter(it => !(it.productoId === productoId && it.origen === origen)); }
+  else if (item) { item.cantidad = next; }
+  else { campBuilder.items.push({ origen, productoId, nombre, cantidad: next }); }
+  renderCampBuilderStep2();
+}
+async function confirmCampBuilder() {
+  if (campBuilder.items.length === 0) { showToast('Elegí al menos un producto para la lista'); return; }
+  try {
+    await db.collection('campamentos').add({
+      nombre: campBuilder.nombre,
+      fechaInicio: campBuilder.fechaInicio,
+      fechaRetorno: campBuilder.fechaRetorno,
+      items: campBuilder.items
+    });
+    campBuilder = null;
+    openCampListaModal();
+    showToast('Lista de campamento guardada');
+  } catch (e) { showToast('No se pudo guardar: ' + e.message); }
+}
+
+/* ---------------- INIT ---------------- */
+// El arranque real ocurre en auth.onAuthStateChanged(...) más arriba, apenas Firebase
+// detecta si hay sesión de Google activa o no.
+</script>
+</body>
+</html>
