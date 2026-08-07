@@ -147,6 +147,9 @@
   .chip-row { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; -ms-overflow-style: none; scrollbar-width: none; }
   .chip-row::-webkit-scrollbar { display: none; }
   .cat-chip { flex-shrink: 0; padding: 7px 13px; border-radius: 20px; background: #F7F9FC; border: 1px solid var(--khaki); font-size: 12.5px; font-weight: 600; color: #33405C; white-space: nowrap; }
+  .cat-chip-del-wrap { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .cat-chip-del { opacity: 0.55; font-size: 11px; padding: 0 2px; }
+  .cat-chip-del:active { opacity: 1; }
   .cat-chip.active { background: var(--forest); color: var(--canvas); border-color: var(--forest); }
   .cat-chip.add-chip { background: var(--canvas-dark); color: var(--forest); border-style: dashed; }
 
@@ -162,7 +165,12 @@
   .crate-body { padding: 13px 14px 12px; }
   .crate-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
   .crate-name { font-family: 'Oswald', sans-serif; font-size: 15.5px; font-weight: 600; margin: 0 0 2px; text-transform: uppercase; cursor: pointer; }
-  .crate-sub { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #4A5C7A; display: flex; gap: 8px; flex-wrap: wrap; }
+  .crate-sub { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #4A5C7A; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .mini-cat-tag { background: var(--canvas-dark); color: var(--khaki); padding: 1px 6px; border-radius: 8px; }
+  .cat-check-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
+  .cat-check-pill { display: flex; align-items: center; gap: 5px; padding: 7px 12px; border-radius: 20px; background: #F7F9FC; border: 1.5px solid var(--khaki); font-size: 12.5px; font-weight: 600; color: #33405C; cursor: pointer; }
+  .cat-check-pill input { width: 14px; height: 14px; accent-color: var(--khaki); margin: 0; }
+  .cat-check-pill.checked { background: var(--forest); color: var(--canvas); border-color: var(--forest); }
   .status-tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 7px; border-radius: 2px; white-space: nowrap; flex-shrink: 0; }
   .status-ok { background: var(--green-bg); color: var(--green-ok); }
   .status-warn { background: var(--amber-bg); color: var(--amber); }
@@ -552,6 +560,7 @@ let campBuilder = null; // { step, nombre, fechaInicio, fechaRetorno, items:[], 
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function catsOf(p) { return (p.categorias && p.categorias.length) ? p.categorias : (p.categoria ? [p.categoria] : []); }
 function todayStr() { const t = new Date(); t.setHours(0,0,0,0); return t; }
 function fmtDate(iso) { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric'}); }
 function daysUntil(dateStr) { const target = new Date(dateStr + 'T00:00:00'); return Math.round((target - todayStr()) / 86400000); }
@@ -675,12 +684,44 @@ function renderCatChips() {
   const chips = document.getElementById('catChips');
   let html = `<button class="cat-chip ${t.filtroCategoria==='todas'?'active':''}" onclick="setCategoria('todas')">Todas</button>`;
   t.categorias.forEach(c => {
-    html += `<button class="cat-chip ${t.filtroCategoria===c?'active':''}" onclick="setCategoria('${escapeHtml(c)}')">${escapeHtml(c)}</button>`;
+    if (puedeEditarStock()) {
+      html += `<span class="cat-chip cat-chip-del-wrap ${t.filtroCategoria===c?'active':''}">
+        <span onclick="setCategoria('${escapeHtml(c)}')">${escapeHtml(c)}</span>
+        <span class="cat-chip-del" onclick="event.stopPropagation(); eliminarCategoria('${escapeHtml(c)}')" title="Eliminar categoría">✕</span>
+      </span>`;
+    } else {
+      html += `<button class="cat-chip ${t.filtroCategoria===c?'active':''}" onclick="setCategoria('${escapeHtml(c)}')">${escapeHtml(c)}</button>`;
+    }
   });
   html += puedeEditarStock() ? `<button class="cat-chip add-chip" onclick="openCategoriaModal()">+ Categoría</button>` : '';
   chips.innerHTML = html;
 }
 function setCategoria(c) { state[state.activeTab].filtroCategoria = c; renderList(); renderCatChips(); }
+
+async function eliminarCategoria(cat) {
+  if (bloquearSiNoAdmin()) return;
+  const t = state[state.activeTab];
+  const col = state.activeTab === 'chino' ? 'stock_chino' : 'stock_panol';
+  const afectados = t.productos.filter(p => catsOf(p).includes(cat));
+  const msg = afectados.length > 0
+    ? `¿Eliminar la categoría "${cat}"? La vas a sacar de ${afectados.length} producto(s) que la tienen asignada.`
+    : `¿Eliminar la categoría "${cat}"?`;
+  if (!confirm(msg)) return;
+  try {
+    const ref = db.collection('config').doc(state.activeTab === 'chino' ? 'categorias_chino' : 'categorias_panol');
+    await ref.set({ lista: firebase.firestore.FieldValue.arrayRemove(cat) }, { merge: true });
+    if (afectados.length > 0) {
+      const batch = db.batch();
+      afectados.forEach(p => {
+        const restantes = catsOf(p).filter(c => c !== cat);
+        batch.update(db.collection(col).doc(p.id), { categorias: restantes, categoria: restantes[0] || '' });
+      });
+      await batch.commit();
+    }
+    if (t.filtroCategoria === cat) t.filtroCategoria = 'todas';
+    showToast('Categoría eliminada');
+  } catch (e) { showToast('No se pudo eliminar: ' + e.message); }
+}
 
 function openCategoriaModal() {
   if (bloquearSiNoAdmin()) return;
@@ -732,7 +773,7 @@ function renderList() {
     items.sort((a,b) => new Date(a.vencimiento) - new Date(b.vencimiento));
     document.getElementById('listLabel').childNodes[0].textContent = 'Próximos a vencer (45 días) ';
   } else {
-    if (t.filtroCategoria !== 'todas') items = items.filter(p => p.categoria === t.filtroCategoria);
+    if (t.filtroCategoria !== 'todas') items = items.filter(p => catsOf(p).includes(t.filtroCategoria));
     if (t.busqueda) items = items.filter(p => p.nombre.toLowerCase().includes(t.busqueda) || (p.codigo||'').includes(t.busqueda));
     items.sort((a,b) => {
       if (isChino) {
@@ -776,7 +817,7 @@ function renderList() {
         <div class="crate-top">
           <div>
             <p class="crate-name" onclick="openProductoModal('${state.activeTab}', '${p.id}')">${escapeHtml(p.nombre)}</p>
-            <div class="crate-sub"><span>${escapeHtml(p.categoria || 'Sin categoría')}</span>${p.codigo ? `<span>· ${escapeHtml(p.codigo)}</span>` : ''}</div>
+            <div class="crate-sub">${(catsOf(p).length ? catsOf(p) : ['Sin categoría']).map(c => `<span class="mini-cat-tag">${escapeHtml(c)}</span>`).join('')}${p.codigo ? `<span>· ${escapeHtml(p.codigo)}</span>` : ''}</div>
           </div>
           ${statusTag}
         </div>
@@ -824,17 +865,20 @@ function openProductoModal(tab, id, codigoSugerido, nombreSugerido) {
   const t = state[tab];
   const existing = id ? t.productos.find(p => p.id === id) : null;
   const isChino = tab === 'chino';
-  const catOptions = t.categorias.map(c => `<option value="${escapeHtml(c)}" ${existing && existing.categoria===c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  const catsActuales = existing ? catsOf(existing) : [];
+  const catCheckboxes = t.categorias.map(c => `
+    <label class="cat-check-pill ${catsActuales.includes(c) ? 'checked' : ''}">
+      <input type="checkbox" value="${escapeHtml(c)}" ${catsActuales.includes(c) ? 'checked' : ''} onchange="this.parentElement.classList.toggle('checked', this.checked)">
+      ${escapeHtml(c)}
+    </label>`).join('');
   openOverlay(`
     <div class="modal">
       <h2>${existing ? 'Editar producto' : 'Cargar producto'} — ${isChino ? 'Chino' : 'Pañol'}</h2>
       <p class="sub">${(existing && existing.codigo) || codigoSugerido ? 'Código: ' + escapeHtml((existing && existing.codigo) || codigoSugerido) : 'Sin código de barras'}</p>
       <label>Nombre del producto</label>
       <input type="text" id="inNombre" placeholder="Ej: Arroz 1kg" value="${escapeHtml((existing && existing.nombre) || nombreSugerido || '')}">
-      <label>Categoría</label>
-      <select id="inCategoria" style="width:100%; padding:10px 12px; border:1.5px solid var(--khaki); border-radius:3px; background:#F7F9FC; font-size:15px;">
-        <option value="">Elegir...</option>${catOptions}
-      </select>
+      <label>Categorías (podés elegir varias)</label>
+      <div class="cat-check-row" id="inCategorias">${catCheckboxes}</div>
       <label>Cantidad</label>
       <input type="number" id="inCantidad" min="0" value="${existing ? existing.cantidad : 1}">
       ${isChino ? `<label>Fecha de vencimiento ${existing ? '' : '(dejar vacío si no es perecedero)'}</label><input type="date" id="inVencimiento" value="${existing && existing.vencimiento ? existing.vencimiento : ''}">` : ''}
@@ -849,17 +893,17 @@ function openProductoModal(tab, id, codigoSugerido, nombreSugerido) {
 async function confirmProducto(tab, codigo) {
   if (bloquearSiNoAdmin()) return;
   const nombre = document.getElementById('inNombre').value.trim();
-  const categoria = document.getElementById('inCategoria').value;
+  const categorias = Array.from(document.querySelectorAll('#inCategorias input:checked')).map(el => el.value);
   const cantidad = parseInt(document.getElementById('inCantidad').value, 10);
   const vencEl = document.getElementById('inVencimiento');
   const vencimiento = vencEl ? vencEl.value : '';
 
   if (!nombre) { showToast('Falta el nombre del producto'); return; }
-  if (!categoria) { showToast('Elegí una categoría'); return; }
+  if (categorias.length === 0) { showToast('Elegí al menos una categoría'); return; }
   if (isNaN(cantidad) || cantidad < 0) { showToast('Cantidad inválida'); return; }
 
   const col = tab === 'chino' ? 'stock_chino' : 'stock_panol';
-  const data = { codigo: codigo || '', nombre, categoria, cantidad, vencimiento: vencEl ? (vencimiento || null) : null };
+  const data = { codigo: codigo || '', nombre, categorias, categoria: categorias[0], cantidad, vencimiento: vencEl ? (vencimiento || null) : null };
   try {
     if (editingProductoId) {
       await db.collection(col).doc(editingProductoId).update(data);
@@ -926,10 +970,10 @@ function onCodeScanned(code) {
 document.getElementById('downloadTemplateBtn').addEventListener('click', () => {
   const isChino = state.activeTab === 'chino';
   const headers = isChino
-    ? ['codigo','nombre','categoria','cantidad','accion','vencimiento(DD/MM/AAAA)']
-    : ['codigo','nombre','categoria','cantidad','accion'];
+    ? ['codigo','nombre','categorias (separadas por ;)','cantidad','accion','vencimiento(DD/MM/AAAA)']
+    : ['codigo','nombre','categorias (separadas por ;)','cantidad','accion'];
   const example = isChino
-    ? ['7791234567890','Arroz 1kg','Alimentos',10,'suma','15/09/2026']
+    ? ['7791234567890','Arroz 1kg','Alimentos;Sin TACC',10,'suma','15/09/2026']
     : ['','Detergente 500ml','Limpieza',5,'suma'];
   const ws = XLSX.utils.aoa_to_sheet([headers, example]);
   ws['!cols'] = headers.map(() => ({ wch: 20 }));
@@ -959,7 +1003,8 @@ document.getElementById('excelFileInput').addEventListener('change', async (e) =
     rows.forEach(row => {
       const codigo = String(row.codigo || '').trim();
       const nombre = String(row.nombre || '').trim();
-      const categoria = String(row.categoria || '').trim();
+      const categoriaRaw = String(row['categorias (separadas por ;)'] || row.categoria || row.categorias || '').trim();
+      const categorias = categoriaRaw.split(';').map(c => c.trim()).filter(Boolean);
       const cantidad = parseInt(row.cantidad, 10);
       const accion = String(row.accion || '').trim().toLowerCase();
       if (!nombre || isNaN(cantidad) || cantidad <= 0 || (accion !== 'suma' && accion !== 'resta')) { errores++; return; }
@@ -977,16 +1022,18 @@ document.getElementById('excelFileInput').addEventListener('change', async (e) =
         }
       }
 
-      if (categoria) categoriasNuevas.add(categoria);
+      if (categorias.length) categorias.forEach(c => categoriasNuevas.add(c));
       const existing = list.find(p => (codigo && p.codigo === codigo) || (!codigo && p.nombre.toLowerCase() === nombre.toLowerCase()));
 
       if (accion === 'suma') {
         if (existing) {
           const upd = { cantidad: existing.cantidad + cantidad };
           if (vencimiento) upd.vencimiento = vencimiento;
+          if (categorias.length) { upd.categorias = categorias; upd.categoria = categorias[0]; }
           batch.update(db.collection(col).doc(existing.id), upd);
         } else {
-          batch.set(db.collection(col).doc(), { codigo, nombre, categoria: categoria || 'Otros', cantidad, vencimiento: isChino ? vencimiento : null });
+          const catsFinal = categorias.length ? categorias : ['Otros'];
+          batch.set(db.collection(col).doc(), { codigo, nombre, categorias: catsFinal, categoria: catsFinal[0], cantidad, vencimiento: isChino ? vencimiento : null });
         }
         sumadas++;
       } else {
@@ -1197,7 +1244,7 @@ function renderCampBuilderStep2() {
   const productos = state[origen].productos;
   const categorias = state[origen].categorias;
   let list = productos.filter(p => {
-    if (campBuilder.categoriaFiltro !== 'todas' && p.categoria !== campBuilder.categoriaFiltro) return false;
+    if (campBuilder.categoriaFiltro !== 'todas' && !catsOf(p).includes(campBuilder.categoriaFiltro)) return false;
     if (campBuilder.busqueda && !p.nombre.toLowerCase().includes(campBuilder.busqueda)) return false;
     return true;
   });
