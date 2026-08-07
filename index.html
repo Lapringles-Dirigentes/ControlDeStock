@@ -133,6 +133,9 @@
   .scan-idle { aspect-ratio: 5/2; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--canvas-dark); gap: 8px; }
   .scan-idle p { margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; opacity: 0.6; text-align: center; padding: 0 24px; }
   .scan-btn-row { display: flex; gap: 8px; margin-top: 8px; }
+  .scan-btn-row .btn-primary { background: #EDF1F8; color: var(--ink); }
+  .scan-btn-row .btn-secondary { background: transparent; border: 1.5px solid #C7D2E3; color: #EDF1F8; }
+  .scan-btn-row .btn-secondary:active { background: rgba(237,241,248,0.12); }
 
   .btn-primary { background: var(--forest); color: var(--canvas); font-weight: 700; font-size: 14px; padding: 12px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.03em; font-family: 'Oswald', sans-serif; flex: 1; }
   .btn-primary.small { padding: 9px; font-size: 12.5px; }
