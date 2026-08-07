@@ -396,6 +396,7 @@ function mostrarLogin(mensajeInicial) {
 }
 function loginConGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
   auth.signInWithPopup(provider).catch(e => showToast('No se pudo iniciar sesión: ' + e.message));
 }
 function mostrarApp() {
@@ -408,6 +409,11 @@ function mostrarApp() {
 async function cerrarSesion() {
   closeOverlay();
   await auth.signOut();
+}
+async function cambiarDeCuenta() {
+  closeOverlay();
+  await auth.signOut();
+  loginConGoogle();
 }
 
 /* ---------------- ESCUCHAS EN TIEMPO REAL (Firestore) ---------------- */
@@ -443,9 +449,25 @@ function iniciarEscuchas() {
 }
 
 /* ---------------- PANEL DE PERMISOS ---------------- */
-document.getElementById('permBtn').addEventListener('click', () => openPermisosPanel());
+document.getElementById('permBtn').addEventListener('click', () => {
+  if (esAdmin()) openPermisosPanel(); else openSesionPanel();
+});
+function openSesionPanel() {
+  openOverlay(`
+    <div class="modal">
+      <button class="modal-close" onclick="closeOverlay()">✕</button>
+      <h2>Tu sesión</h2>
+      <p class="sub">Stock La Pringles</p>
+      <div class="session-bar">
+        <div>Conectado como<b>${escapeHtml(sesionEmail)}</b></div>
+      </div>
+      <button class="btn-secondary btn-block" onclick="cambiarDeCuenta()">Cambiar de cuenta</button>
+      <button class="btn-primary btn-block" style="background:var(--red)" onclick="cerrarSesion()">Cerrar sesión</button>
+    </div>
+  `);
+}
 function openPermisosPanel() {
-  if (!esAdmin()) { showToast('Esta sección es solo para administradores'); return; }
+  if (!esAdmin()) { openSesionPanel(); return; }
   const lista = [{ email: SUPER_ADMIN, rol: 'admin', fijo: true }, ...usuarios.filter(u => u.email !== SUPER_ADMIN)];
   openOverlay(`
     <div class="modal full">
@@ -454,7 +476,10 @@ function openPermisosPanel() {
       <p class="sub">Quién puede entrar a Stock La Pringles</p>
       <div class="session-bar">
         <div>Conectado como<b>${escapeHtml(sesionEmail)}</b></div>
-        <button class="icon-btn" onclick="cerrarSesion()">Cerrar sesión</button>
+        <div style="display:flex; gap:6px;">
+          <button class="icon-btn" onclick="cambiarDeCuenta()">Cambiar cuenta</button>
+          <button class="icon-btn del" onclick="cerrarSesion()">Cerrar sesión</button>
+        </div>
       </div>
       <label>Agregar nuevo acceso</label>
       <input type="email" id="inNuevoEmail" placeholder="email@gmail.com" autocapitalize="off">
